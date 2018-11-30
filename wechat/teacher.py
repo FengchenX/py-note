@@ -1,6 +1,4 @@
 import os
-
-import pymysql
 import requests
 import re
 import time
@@ -15,7 +13,7 @@ import ssl
 import threading
 import urllib.request, urllib.parse, urllib.error, urllib.request, urllib.error, urllib.parse
 
-DEBUG = True  # 测试时候 可以改为True，输出测试的json数据
+DEBUG = True # 测试时候 可以改为True，输出测试的json数据
 
 MAX_GROUP_NUM = 2  # 每组人数
 INTERFACE_CALLING_INTERVAL = 5  # 接口调用时间间隔, 间隔太短容易出现"操作太频繁", 会被限制操作半小时左右
@@ -50,73 +48,34 @@ except:
     pass
 
 
-def main():
-    global connection
-    # Connect to the database
-    connection = pymysql.connect(host='localhost',
-                                 user='root',
-                                 password='feng',
-                                 db='auth',
-                                 charset='utf8mb4',
-                                 cursorclass=pymysql.cursors.DictCursor)
-    global myRequests
-    if hasattr(ssl, '_create_unverified_context'):
-        ssl._create_default_https_context = ssl._create_unverified_context
-    headers = {
-        'User-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.125 Safari/537.36'
-    }
-    myRequests = requests.Session()
-    myRequests.headers.update(headers)
+def responseState(func, BaseResponse):
+    ErrMsg = BaseResponse['ErrMsg']
+    Ret = BaseResponse['Ret']
+    if DEBUG or Ret != 0:
+        print('func: %s, Ret: %d, ErrMsg: %s' % (func, Ret, ErrMsg))
 
-    if not getUUID():
-        print('获取uuid失败')
-        return
+    if Ret != 0:
+        return False
 
-    print('正在获取二维码图片...')
-    showQRImage()
-
-    while waitForLogin() != '200':
-        pass
-
-    os.remove(QRImagePath)
-
-    if not login():
-        print('登陆失败')
-        return
-
-    if not webwxinit():
-        print('初始化失败')
-        return
-
-    MemberList = webwxgetcontact()
-
-    MemberCount = len(MemberList)
-    print('通讯录共%s位好友' % MemberCount)
-    print(MemberList)
-
-    d = {}
-    imageIndex = 0
-
-    try:
-        with connection.cursor() as cursor:
-            for Member in MemberList:
-                insertUser(cursor, Member)
-    finally:
-        connection.close()
+    return True
 
 
 def getUUID():
     global uuid
+
     url = 'https://login.weixin.qq.com/jslogin'
     params = {
         'appid': 'wx782c26e4c19acffb',
         'fun': 'new',
         'lang': 'zh_CN',
-        '_': int(time.time())
+        '_': int(time.time()),
     }
+
     r = myRequests.get(url=url, params=params)
     r.encoding = 'utf-8'
     data = r.text
+
+    # print(data)
 
     # window.QRLogin.code = 200; window.QRLogin.uuid = "oZwt_bFfRg==";
     regx = r'window.QRLogin.code = (\d+); window.QRLogin.uuid = "(\S+?)"'
@@ -133,12 +92,15 @@ def getUUID():
 
 def showQRImage():
     global tip
+
     url = 'https://login.weixin.qq.com/qrcode/' + uuid
     params = {
         't': 'webwx',
-        '_': int(time.time())
+        '_': int(time.time()),
     }
+
     r = myRequests.get(url=url, params=params)
+
     tip = 1
 
     f = open(QRImagePath, 'wb')
@@ -168,7 +130,7 @@ def waitForLogin():
 
     # print(data)
 
-    # window.code = 500;
+    # window.code=500;
     regx = r'window.code=(\d+);'
     pm = re.search(regx, data)
 
@@ -178,7 +140,7 @@ def waitForLogin():
         print('成功扫描,请在手机上点击确认以登录')
         tip = 0
     elif code == '200':  # 已登录
-        print("正在登陆...")
+        print('正在登录...')
         regx = r'window.redirect_uri="(\S+?)";'
         pm = re.search(regx, data)
         redirect_uri = pm.group(1) + '&fun=new'
@@ -231,8 +193,8 @@ def login():
         elif node.nodeName == 'pass_ticket':
             pass_ticket = node.childNodes[0].data
 
-        # print('skey: %s, wxsid: %s, wxuin: %s, pass_ticket: %s' % (skey, wxsid,
-        # wxuin, pass_ticket))
+    # print('skey: %s, wxsid: %s, wxuin: %s, pass_ticket: %s' % (skey, wxsid,
+    # wxuin, pass_ticket))
 
     if not all((skey, wxsid, wxuin, pass_ticket)):
         return False
@@ -292,6 +254,7 @@ def webwxgetcontact():
 
     dic = data
     MemberList = dic['MemberList']
+
     # 倒序遍历,不然删除的时候出问题..
     SpecialUsers = ["newsapp", "fmessage", "filehelper", "weibo", "qqmail", "tmessage", "qmessage", "qqsync",
                     "floatbottle", "lbsapp", "shakeapp", "medianote", "qqfriend", "readerapp", "blogapp", "facebookapp",
@@ -313,36 +276,155 @@ def webwxgetcontact():
     return MemberList
 
 
-def responseState(func, BaseResponse):
-    ErrMsg = BaseResponse['ErrMsg']
-    Ret = BaseResponse['Ret']
-    if DEBUG or Ret != 0:
-        print('func: %s, Ret: %d, ErrMsg: %s' % (func, Ret, ErrMsg))
-
-    if Ret != 0:
-        return False
-
-    return True
+def syncKey():
+    SyncKeyItems = ['%s_%s' % (item['Key'], item['Val'])
+                    for item in SyncKey['List']]
+    SyncKeyStr = '|'.join(SyncKeyItems)
+    return SyncKeyStr
 
 
-def get(cursor):
-    # Read a single record
-    sql = "SELECT `id`, `password` FROM `users` WHERE `email`=%s"
-    cursor.execute(sql, ('webmaster@python.org',))
-    result = cursor.fetchone()
-    print(result)
+def syncCheck():
+    url = push_uri + '/synccheck?'
+    params = {
+        'skey': BaseRequest['Skey'],
+        'sid': BaseRequest['Sid'],
+        'uin': BaseRequest['Uin'],
+        'deviceId': BaseRequest['DeviceID'],
+        'synckey': syncKey(),
+        'r': int(time.time()),
+    }
+
+    r = myRequests.get(url=url, params=params)
+    r.encoding = 'utf-8'
+    data = r.text
+
+    # print(data)
+
+    # window.synccheck={retcode:"0",selector:"2"}
+    regx = r'window.synccheck={retcode:"(\d+)",selector:"(\d+)"}'
+    pm = re.search(regx, data)
+
+    retcode = pm.group(1)
+    selector = pm.group(2)
+
+    return selector
 
 
-def insertUser(cursor, member):
-    if member["NickName"]:
+def webwxsync():
+    global SyncKey
 
-    sql = "INSERT INTO `wx_friends` (`user_name`, `nick_name`, `head_img_url`, `contact_flag`, `member_count`," \
-          " `sex`, `verify_flag`, `province`, `city`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-    cursor.execute(sql, (
-        member["UserName"], member["NickName"], member["HeadImgUrl"], member["ContactFlag"], member["MemberCount"],
-        member["Sex"], member["VerifyFlag"], member["Province"], member["City"]))
-    connection.commit()
+    url = base_uri + '/webwxsync?lang=zh_CN&skey=%s&sid=%s&pass_ticket=%s' % (
+        BaseRequest['Skey'], BaseRequest['Sid'], urllib.parse.quote_plus(pass_ticket))
+    params = {
+        'BaseRequest': BaseRequest,
+        'SyncKey': SyncKey,
+        'rr': ~int(time.time()),
+    }
+    headers = {'content-type': 'application/json; charset=UTF-8'}
+
+    r = myRequests.post(url=url, data=json.dumps(params))
+    r.encoding = 'utf-8'
+    data = r.json()
+
+    # print(data)
+
+    dic = data
+    SyncKey = dic['SyncKey']
+
+    state = responseState('webwxsync', dic['BaseResponse'])
+    return state
+
+
+def heartBeatLoop():
+    while True:
+        selector = syncCheck()
+        if selector != '0':
+            webwxsync()
+        time.sleep(1)
+
+
+def main():
+    global myRequests
+
+    if hasattr(ssl, '_create_unverified_context'):
+        ssl._create_default_https_context = ssl._create_unverified_context
+
+    headers = {
+        'User-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.125 Safari/537.36'}
+    myRequests = requests.Session()
+    myRequests.headers.update(headers)
+
+    if not getUUID():
+        print('获取uuid失败')
+        return
+
+    print('正在获取二维码图片...')
+    showQRImage()
+
+    while waitForLogin() != '200':
+        pass
+
+    os.remove(QRImagePath)
+
+    if not login():
+        print('登录失败')
+        return
+
+    if not webwxinit():
+        print('初始化失败')
+        return
+
+    MemberList = webwxgetcontact()
+
+    threading.Thread(target=heartBeatLoop)
+
+    MemberCount = len(MemberList)
+    print('通讯录共%s位好友' % MemberCount)
+    print(MemberList)
+
+    d = {}
+    imageIndex = 0
+    # 写入csv
+    csvfile = open('friend2.csv', 'w', newline='')
+    # csvfile.write(codecs.BOM_UTF8)
+    global writer
+    writer = csv.writer(csvfile)
+    writer.writerow(['name', 'city', 'male', 'star', 'signature', 'remark', 'alias', 'nick'])
+    for Member in MemberList:
+        imageIndex = imageIndex + 1
+        name = 'D:\\Python\\Demo\\image\\image' + str(imageIndex) + '.jpg'
+        imageUrl = 'https://wx.qq.com' + Member['HeadImgUrl']
+        r = myRequests.get(url=imageUrl, headers=headers)
+        imageContent = (r.content)
+        fileImage = open(name, 'wb')
+        fileImage.write(imageContent)
+        fileImage.close()
+        print('正在下载第：' + str(imageIndex) + '位好友头像')
+        d[Member['UserName']] = (Member['NickName'], Member['RemarkName'])
+        city = Member['City']
+        city = 'nocity' if city == '' else city
+        name = Member['NickName']
+        name = 'noname' if name == '' else name
+        sign = Member['Signature']
+        sign = 'nosign' if sign == '' else sign
+        remark = Member['RemarkName']
+        remark = 'noremark' if remark == '' else remark
+        alias = Member['Alias']
+        alias = 'noalias' if alias == '' else alias
+        nick = Member['NickName']
+        nick = 'nonick' if nick == '' else nick
+        print(name, '  ^+*+^  ', city, '  ^+*+^  ', Member['Sex'], ' ^+*+^ ', Member['StarFriend'], ' ^+*+^ ', sign,
+              ' ^+*+^ ', remark, ' ^+*+^ ', alias, ' ^+*+^ ', nick)
+        # 写入csv
+        writer.writerow([name.encode('gbk', 'ignore').decode('gbk'), city.encode('gbk', 'ignore').decode('gbk'),
+                         Member['Sex'],
+                         Member['StarFriend'], sign.encode('gbk', 'ignore').decode('gbk'),
+                         remark.encode('gbk', 'ignore').decode('gbk'),
+                         alias.encode('gbk', 'ignore').decode('gbk'),
+                         nick.encode('gbk', 'ignore').decode('gbk')])
+    csvfile.close()
 
 
 if __name__ == '__main__':
     main()
+    print('程序已安全退出...')
