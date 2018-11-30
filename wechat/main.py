@@ -334,12 +334,10 @@ def get(cursor):
 
 
 def insertUser(cursor, member):
-    if member["NickName"]:
-
     sql = "INSERT INTO `wx_friends` (`user_name`, `nick_name`, `head_img_url`, `contact_flag`, `member_count`," \
           " `sex`, `verify_flag`, `province`, `city`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
     cursor.execute(sql, (
-        member["UserName"], member["NickName"], member["HeadImgUrl"], member["ContactFlag"], member["MemberCount"],
+        member["UserName"], member['NickName'], member["HeadImgUrl"], member["ContactFlag"], member["MemberCount"],
         member["Sex"], member["VerifyFlag"], member["Province"], member["City"]))
     connection.commit()
 
