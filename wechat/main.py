@@ -94,8 +94,73 @@ def main():
     print('通讯录共%s位好友' % MemberCount)
     print(MemberList)
 
+    print('开启心跳线程')
+    threading.Thread(target=heartBeatLoop)
+
+    ChatRoomName = ''
+    result = []
     d = {}
     imageIndex = 0
+
+    for Member in MemberList:
+        d[Member['UserName']] = (Member['NickName'], Member['RemarkName'])
+    print('开始查找...')
+    group_num = int(math.ceil(MemberCount / float(MAX_GROUP_NUM)))
+    for i in range(0, group_num):
+        UserNames = []
+        for j in range(0, MAX_GROUP_NUM):
+            if i * MAX_GROUP_NUM + j >= MemberCount:
+                break
+            Member = MemberList[i * MAX_GROUP_NUM + j]
+            UserNames.append(Member['UserName'])
+
+        # 新建群组/添加成员
+        if ChatRoomName == '':
+            (ChatRoomName, DeletedList, BlockedList) = createChatroom(UserNames)
+        else:
+            (DeletedList, BlockedList) = addMember(ChatRoomName, UserNames)
+
+        # todo BlockedList 被拉黑列表
+
+        DeletedCount = len(DeletedList)
+        if DeletedCount > 0:
+            result += DeletedList
+
+        # 删除成员
+        deleteMember(ChatRoomName, UserNames)
+
+        # 进度条
+        progress = MAX_PROGRESS_LEN * (i + 1) / group_num
+        print('[', '#' * int(progress), '-' * int(MAX_PROGRESS_LEN - progress), ']', end=' ')
+        print('新发现你被%d人删除' % DeletedCount)
+        for i in range(DeletedCount):
+            if d[DeletedList[i]][1] != '':
+                print('%s(%s)' % (d[DeletedList[i]][0], d[DeletedList[i]][1]))
+            else:
+                print(d[DeletedList[i]][0])
+
+        if i != group_num - 1:
+            print('正在继续查找,请耐心等待...')
+            # 下一次进行接口调用需要等待的时间
+            time.sleep(INTERFACE_CALLING_INTERVAL)
+
+        # todo 删除群组
+
+    print('\n结果汇总完毕, 20s后可重试...')
+    resultNames = []
+    for r in result:
+        if d[r][1] != '':
+            resultNames.append('%s(%s)' % (d[r][0], d[r][1]))
+        else:
+            resultNames.append(d[r][0])
+    print('---------- 被删除的好友列表(共%d人) ----------' % len(result))
+    # 过滤emoji
+    resultNames = list(map(lambda x: re.sub(r'<span.+/span>', '', x), resultNames))
+    if len(resultNames):
+        print('\n'.join(resultNames))
+    else:
+        print("无")
+    print('---------------------------------------------')
 
     try:
         with connection.cursor() as cursor:
@@ -325,6 +390,161 @@ def responseState(func, BaseResponse):
     return True
 
 
+def createChatroom(UserNames):
+    MemberList = [{'UserName': UserName} for UserName in UserNames]
+    url = (base_uri +
+           '/webwxcreatechatroom?pass_ticket=%s&r=%s' % (
+               pass_ticket, int(time.time())))
+    params = {
+        'BaseRequest': BaseRequest,
+        'MemberCount': len(MemberList),
+        'MemberList': MemberList,
+        'Topic': '',
+    }
+    headers = {'content-type': 'application/json; charset=UTF-8'}
+
+    r = myRequests.post(url=url, data=json.dumps(params), headers=headers)
+    r.encoding = 'utf-8'
+    data = r.json()
+
+    # print(data)
+
+    dic = data
+    ChatRoomName = dic['ChatRoomName']
+    MemberList = dic['MemberList']
+    DeletedList = []
+    BlockedList = []
+    for Member in MemberList:
+        if Member['MemberStatus'] == 4:  # 被对方删除了
+            DeletedList.append(Member['UserName'])
+        elif Member['MemberStatus'] == 3:  # 被加入黑名单
+            BlockedList.append(Member['UserName'])
+
+    state = responseState('createChatroom', dic['BaseResponse'])
+
+    return ChatRoomName, DeletedList, BlockedList
+
+
+def deleteMember(ChatRoomName, UserNames):
+    url = (base_uri +
+           '/webwxupdatechatroom?fun=delmember&pass_ticket=%s' % (pass_ticket))
+    params = {
+        'BaseRequest': BaseRequest,
+        'ChatRoomName': ChatRoomName,
+        'DelMemberList': ','.join(UserNames),
+    }
+    headers = {'content-type': 'application/json; charset=UTF-8'}
+
+    r = myRequests.post(url=url, data=json.dumps(params), headers=headers)
+    r.encoding = 'utf-8'
+    data = r.json()
+
+    # print(data)
+
+    dic = data
+
+    state = responseState('deleteMember', dic['BaseResponse'])
+    return state
+
+
+def addMember(ChatRoomName, UserNames):
+    url = (base_uri +
+           '/webwxupdatechatroom?fun=addmember&pass_ticket=%s' % (pass_ticket))
+    params = {
+        'BaseRequest': BaseRequest,
+        'ChatRoomName': ChatRoomName,
+        'AddMemberList': ','.join(UserNames),
+    }
+    headers = {'content-type': 'application/json; charset=UTF-8'}
+
+    r = myRequests.post(url=url, data=json.dumps(params), headers=headers)
+    r.encoding = 'utf-8'
+    data = r.json()
+
+    # print(data)
+
+    dic = data
+    MemberList = dic['MemberList']
+    DeletedList = []
+    BlockedList = []
+    for Member in MemberList:
+        if Member['MemberStatus'] == 4:  # 被对方删除了
+            DeletedList.append(Member['UserName'])
+        elif Member['MemberStatus'] == 3:  # 被加入黑名单
+            BlockedList.append(Member['UserName'])
+
+    state = responseState('addMember', dic['BaseResponse'])
+
+    return DeletedList, BlockedList
+
+
+def webwxsync():
+    global SyncKey
+
+    url = base_uri + '/webwxsync?lang=zh_CN&skey=%s&sid=%s&pass_ticket=%s' % (
+        BaseRequest['Skey'], BaseRequest['Sid'], urllib.quote_plus(pass_ticket))
+    params = {
+        'BaseRequest': BaseRequest,
+        'SyncKey': SyncKey,
+        'rr': ~int(time.time()),
+    }
+    headers = {'content-type': 'application/json; charset=UTF-8'}
+
+    r = myRequests.post(url=url, data=json.dumps(params))
+    r.encoding = 'utf-8'
+    data = r.json()
+
+    # print(data)
+
+    dic = data
+    SyncKey = dic['SyncKey']
+
+    state = responseState('webwxsync', dic['BaseResponse'])
+    return state
+
+
+def heartBeatLoop():
+    while True:
+        selector = syncCheck()
+        if selector != '0':
+            webwxsync()
+        time.sleep(1)
+
+
+def syncKey():
+    SyncKeyItems = ['%s_%s' % (item['Key'], item['Val'])
+                    for item in SyncKey['List']]
+    SyncKeyStr = '|'.join(SyncKeyItems)
+    return SyncKeyStr
+
+
+def syncCheck():
+    url = push_uri + '/synccheck?'
+    params = {
+        'skey': BaseRequest['Skey'],
+        'sid': BaseRequest['Sid'],
+        'uin': BaseRequest['Uin'],
+        'deviceId': BaseRequest['DeviceID'],
+        'synckey': syncKey(),
+        'r': int(time.time()),
+    }
+
+    r = myRequests.get(url=url, params=params)
+    r.encoding = 'utf-8'
+    data = r.text
+
+    # print(data)
+
+    # window.synccheck={retcode:"0",selector:"2"}
+    regx = r'window.synccheck={retcode:"(\d+)",selector:"(\d+)"}'
+    pm = re.search(regx, data)
+
+    retcode = pm.group(1)
+    selector = pm.group(2)
+
+    return selector
+
+
 def get(cursor):
     # Read a single record
     sql = "SELECT `id`, `password` FROM `users` WHERE `email`=%s"
@@ -342,5 +562,32 @@ def insertUser(cursor, member):
     connection.commit()
 
 
+# windows下编码问题修复
+# http://blog.csdn.net/heyuxuanzee/article/details/8442718
+
+class UnicodeStreamFilter:
+    def __init__(self, target):
+        self.target = target
+        self.encoding = 'utf-8'
+        self.errors = 'replace'
+        self.encode_to = self.target.encoding
+
+    def write(self, s):
+        if type(s) == str:
+            try:
+                s = s.decode('utf-8')
+            except:
+                pass
+        s = s.encode(self.encode_to, self.errors).decode(self.encode_to)
+        self.target.write(s)
+
+
+if sys.stdout.encoding == 'cp936':
+    sys.stdout = UnicodeStreamFilter(sys.stdout)
+
 if __name__ == '__main__':
+    print('本程序的查询结果可能会引起一些心理上的不适,请小心使用...')
+    print('1小时内只能使用一次，否则会因操作繁忙阻止建群')
     main()
+    print('回车键退出...')
+    input()
