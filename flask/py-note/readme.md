@@ -1,1 +1,0 @@
-all mirco service
