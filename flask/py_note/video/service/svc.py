@@ -1,7 +1,8 @@
-from flask import Flask
-from  py_service.service import svc
+# from flask import Flask
+from service import base
 
-app = svc.app
+app = base.app
+
 
 @app.route('/video')
 def video():
