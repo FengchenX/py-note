@@ -27,6 +27,8 @@ class VideoSysDB(base.SystemDB):
             sql="""SELECT * FROM video %s""" % args
             cursor.execute(sql)
             rows = cursor.fetchall()
-            return rows 
+            for row in rows:
+               videos = {"id":row[0], "name":row[1], "url":row[2], "desc":row[3], "thumb":row[4]}
+            return videos 
         finally:
             cursor.close()
