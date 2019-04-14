@@ -1,5 +1,5 @@
 
-drop table if exists COMPANY;
+DROP TABLE IF EXISTS COMPANY;
 CREATE TABLE COMPANY
        (ID TEXT PRIMARY KEY     NOT NULL,
        NAME           TEXT    NOT NULL,
@@ -7,9 +7,11 @@ CREATE TABLE COMPANY
        ADDRESS        CHAR(50),
        SALARY         REAL);
 
-drop table if exists entries;
-create table entries (
-  id integer primary key ,
-  title TEXT not null,
-  text TEXT not null
+DROP TABLE IF EXISTS video;
+CREATE TABLE video (
+  id CHAR(32) PRIMARY KEY,
+  name CHAR(64),
+  url CHAR(256),
+  "desc" CHAR(256),
+  thumb CHAR(256)
 );

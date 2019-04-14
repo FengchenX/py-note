@@ -1,5 +1,4 @@
 #!/home/f/py-note/flask/py_third/bin/python3.6
-
 # -*- coding: utf-8 -*-
 import re
 import sys

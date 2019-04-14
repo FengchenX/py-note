@@ -1,5 +1,5 @@
 from  service import svc
-from db.pg import sys
+from db.pg import sysdb
 
 if __name__ == '__main__':
 
@@ -10,7 +10,9 @@ if __name__ == '__main__':
     # sys.sysDB.commit()
     # cur.close()
 
-    videoDB= sys.VideoSysDB('/home/f/py-note/flask/py_note/video/db/pg/schema.sql')
+    videoDB= sysdb.VideoSysDB('/home/f/py-note/flask/py_note/video/db/pg/schema.sql')
     videoDB.ConnectDB()
-    videoDB.InitDB(videoDB.Sql)
+    # videoDB.InitDB(videoDB.Sql)
+    svc.videoDB=videoDB
+
     svc.app.run(host='0.0.0.0')
