@@ -10,6 +10,7 @@ if __name__ == '__main__':
     # sys.sysDB.commit()
     # cur.close()
 
-    sys.CreateTb()
-    
+    videoDB= sys.VideoSysDB('/home/f/py-note/flask/py_note/video/db/pg/schema.sql')
+    videoDB.ConnectDB()
+    videoDB.InitDB(videoDB.Sql)
     svc.app.run(host='0.0.0.0')
