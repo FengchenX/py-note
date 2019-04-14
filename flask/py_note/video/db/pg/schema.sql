@@ -4,14 +4,14 @@ CREATE TABLE COMPANY
        (ID TEXT PRIMARY KEY     NOT NULL,
        NAME           TEXT    NOT NULL,
        AGE            INT     NOT NULL,
-       ADDRESS        CHAR(50),
+       ADDRESS        VARCHAR(50),
        SALARY         REAL);
 
 DROP TABLE IF EXISTS video;
 CREATE TABLE video (
-  id CHAR(32) PRIMARY KEY,
-  name CHAR(64),
-  url CHAR(256),
-  "desc" CHAR(256),
-  thumb CHAR(256)
+  id VARCHAR(64) PRIMARY KEY,
+  name VARCHAR(64),
+  url VARCHAR(256),
+  describe VARCHAR(256),
+  thumb VARCHAR(256)
 );
