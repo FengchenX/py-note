@@ -12,7 +12,7 @@ if __name__ == '__main__':
 
     videoDB= sysdb.VideoSysDB('/home/f/py-note/flask/py_note/video/db/pg/schema.sql')
     videoDB.ConnectDB()
-    # videoDB.InitDB(videoDB.Sql)
+    videoDB.InitDB(videoDB.Sql)
     svc.videoDB=videoDB
 
     svc.app.run(host='0.0.0.0')
