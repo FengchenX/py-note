@@ -1,5 +1,5 @@
 from db.pg import base
-
+from utils import util
 
 class VideoSysDB(base.SystemDB):
     def __init__(self, file):
@@ -19,17 +19,7 @@ class VideoSysDB(base.SystemDB):
         try:
             args=''
             comma='WHERE'
-            for k, v in video.items():
-                if v:
-                    args = "%s %s %s='%s'" %(args, comma, k, v)
-                    comma = "AND"
-                # if k == 'id':
-                #     args = "%s %s %s='%s'" %(args, comma, k, v)
-                #     comma = "AND"
-                # if k=='name':
-                #     args = "%s %s name='%s'" %(args, comma, v)
-                #     comma = "AND"
-            
+            args, comma = util.SplicingSql(args, comma,  video)
             sql="""SELECT * FROM video %s""" % args
             cursor.execute(sql)
             rows = cursor.fetchall()

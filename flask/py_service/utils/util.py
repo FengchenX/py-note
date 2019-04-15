@@ -1,11 +1,9 @@
-def SplicingSql(args, comma, object={}, *ignores):
-    for k, v in object.items():
-        for ingore in ingores:
-            if k==ingore:
-                continue
-        SplicingDebris(args, comma, k, v)
-        pass
-
+def SplicingSql(args, comma, kw={}, *ignores):
+    for k, v in kw.items():
+        if k in ignores:
+            continue         
+        args, comma = SplicingDebris(args, comma, k, v)
+    return args, comma
 
 def SplicingDebris(args, comma, k, v):
     if not v:
@@ -18,4 +16,15 @@ def SplicingDebris(args, comma, k, v):
         args = "%s %s %s = %s"%(args, comma, k, v)
     if isinstance(v, float):
         args = "%s %s %s = %s"%(args, comma, k, v)
+    return args, parseComma(comma)
+    
+
+def parseComma(comma=''):
+    if comma.upper() == "WHERE":
+        comma ="AND"
+    if not comma:
+        comma="AND"
+    if comma.upper()=="SET":
+        comma=','
+    return comma
         
